@@ -1,12 +1,12 @@
 const {firestoreDatabase} = require("./Database/firebase");
 const express = require("express"); 
 const admin = require("firebase-admin")
-const serviceAccount = require("./Database/optimal-doc-firebase-adminsdk-fnfzt-4d507fce77.json");
+// const serviceAccount = require("./Database/optimal-doc-firebase-adminsdk-fnfzt-4d507fce77.json");
 const {Expo} = require("expo-server-sdk");
 
-admin.initializeApp({
-    credential:admin.credential.cert(serviceAccount)
-})
+// admin.initializeApp({
+//     credential:admin.credential.cert(serviceAccount)
+// })
 const app = express();
 const port = 8080;
 
