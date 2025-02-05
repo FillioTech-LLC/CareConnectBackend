@@ -45,14 +45,14 @@ app.post('/submitToken', (req, res) => {
 
 app.post("/sendNotification", async (req, res) => {
     // Create the messages array
-    let token = "ExponentPushToken[giGYeEBIHTjGlhoija7mk_]"
+    let token = "ExponentPushToken[oP6arUElkynB5lnYe7uCnA]" 
     let messages = [];
     if (Expo.isExpoPushToken(token)) {
         messages.push({
             to: token,
             sound: 'default',
-            title: "Gama es gay",
-            body: "La persona mas gay que conozco, despues de mi hermano",
+            title: "Gama es mujer",
+            body: "Mas nena no puede ser. Yo creo que le busco un novio",
             data: { withSome: 'data' },
         });
     }
