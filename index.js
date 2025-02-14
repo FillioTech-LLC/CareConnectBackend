@@ -46,18 +46,6 @@ app.get(`/getAllPatients`, async (req, resp) => {
   }
 })
 
-app.post('/submitToken', (req, res) => {
-    const token = req.body.token;
-    if (!token)
-        return res.status(401).json({ error: "Token not provided" });
-    //tokenArray.push(token);
-    // const docRef = await firebase.firestoreDatabase.addDoc(firebase.firestoreDatabase.collection(firebase.firestoreDatabase.db, "Users"), {
-    //     });
-
-    // console.log(`token ->  ${token}`)
-    return res.json({ msg: "Token received successfully"});
-})
-
 app.post("/sendPatientCompletedNotification", async (req, res) => {
     // Create the messages array
     // let token = "ExponentPushToken[wOX2vLBx-1QT7gLI3YNG3i]" 
