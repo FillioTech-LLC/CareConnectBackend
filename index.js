@@ -52,22 +52,31 @@ app.post("/sendPatientCompletedNotification", async (req, res) => {
     const tokens = await getListOfTokensFromDB();
     let messages = [];
     const {patientRecordNumber} = req.body;
-    const currentTime = new Date().toLocaleString();
+    const currentTime = new Date().toLocaleString("en-US", { timeZone: "America/Halifax" });
+     if(!patientRecordNumber)
+      return res.status(400).send("Patient record number is required");
     // console.log("current time -> ", currentTime)
     // console.log("tokens -> ", tokens)
+    var notificationContent = {
+        title: "Patient Has Completed Test",
+        body: `Patient with record id "${patientRecordNumber}" has completed their test!`,
+        date: currentTime,
+    }
+
+    await firestoreDatabase.addDoc(firestoreDatabase.collection(firestoreDatabase.db, "Notifications"), notificationContent);
+
     tokens.map(token => {
         if (Expo.isExpoPushToken(token)) {
             messages.push({
                 to: token,
                 sound: 'default',
-                title: "Patient Has Completed Test",
-                body: `Patient with record id "${patientRecordNumber}" has completed their test!`,
-                data: { currentTime },
+                title: notificationContent.title,
+                body: notificationContent.body,
+                data: notificationContent.date
             });
         }
     })
-    if(!patientRecordNumber)
-        return res.status(400).send("Patient record number is required");
+ 
     
     // Send the notifications
     let chunks = expo.chunkPushNotifications(messages);
@@ -108,19 +117,29 @@ async function notifyDoctorsOfPatientsMissingTests(listOfPatientWithMissingTests
   for (let patient of listOfPatientWithMissingTests) 
     stringOfMissingPatients += "- " + patient.patientRecordNumber + " \n";
   
-  
+
+
   let messages = []
-  tokens.map(token => {
+  tokens.map(async token => {
     if (!Expo.isExpoPushToken(token)) {
       console.error("Invalid Expo push token:", token);
       //return;
     }else{
+      const currentTime = new Date().toLocaleString("en-US", { timeZone: "America/Halifax" });
+      var notificationContent = {
+          title: "Patients with missing tests",
+          body: `The following patients have not yet completed their tests: \n ${stringOfMissingPatients} \n Please remind the patients that they need to complete their tests.`,
+          date: currentTime,
+      }
+
+      await firestoreDatabase.addDoc(firestoreDatabase.collection(firestoreDatabase.db, "Notifications"), notificationContent);
+
       messages.push({
         to: token,
         sound: "default",
-        title: "Patients with missing tests",
-        body: `The following patients have not yet completed their tests: \n ${stringOfMissingPatients} \n Please remind the patients that they need to complete their tests.`,
-        data: {},
+        title: notificationContent.title,
+        body: notificationContent.body,
+        data: notificationContent.date,
       });
     }
 })
@@ -149,25 +168,31 @@ function isPatientMissingTests(patient) {
 
 // Function to check if patients are missing their tests and send notifications to the doctors letting them know of the patients that are missing tests
 async function checkPatientsAndSendNotifications(){
-  const currentTime = new Date().toLocaleString();
+  const currentTime = new Date().toLocaleString("en-US", { timeZone: "America/Halifax" });
   console.log(`Running scheduled patient test check at ${currentTime}`);
   try {
-    // Fetch patients from Firestore
-    const querySnapshot = await firestoreDatabase.getDocs(firestoreDatabase.collection(firestoreDatabase.db, "Patients"));
+      // Fetch patients from Firestore
+      const querySnapshot = await firestoreDatabase.getDocs(firestoreDatabase.collection(firestoreDatabase.db, "Patients"));
 
-    // Map the results to an array of patient objects
-    const patients = querySnapshot.docs.map(doc => ({
-      ...doc.data().patientInfo,
-      documentID: doc.id
-    }));
-    // Send the notifications to the doctors about their patients missing tests
-    await notifyDoctorsOfPatientsMissingTests(patients.filter(patient => isPatientMissingTests(patient)));
+      // Map the results to an array of patient objects
+      const patients = querySnapshot.docs.map(doc => ({
+        ...doc.data().patientInfo,
+        documentID: doc.id
+      }));
+      // Send the notifications to the doctors about their patients missing tests
+      await notifyDoctorsOfPatientsMissingTests(patients.filter(patient => hasTestPassedTenDays(patient)));
 
   } catch (error) {
     console.error("Error during scheduled test check:", error);
   }
 }
 
+function hasTestPassedTenDays(patient) {
+  if (!patient.allTestsCompleted) return false;
+  const testDate = new Date(patient.testOrderDate);
+  const tenDaysAfter = new Date(testDate.getTime() + 10 * 24 * 60 * 60 * 1000);
+  return new Date() >= tenDaysAfter;
+}
 
 // Helper function to check if the current day is a multiple of five
 function isMultipleOfFive() {
@@ -178,13 +203,11 @@ function isMultipleOfFive() {
 
 // Schedule a job to run every day at 8:00 AM (server time)
 cron.schedule("0 8 * * *", () =>{
-  if(isMultipleOfFive())
       checkPatientsAndSendNotifications()
 });
 
 // Schedule a job to run every day at 5:00 PM (server time)
 cron.schedule("0 17 * * *", () =>{
-  if(true)
       checkPatientsAndSendNotifications()
 });
 
