@@ -5,6 +5,7 @@ const cron = require("node-cron");
 const cors = require('cors');
 // const serviceAccount = require("./Database/optimal-doc-firebase-adminsdk-fnfzt-4d507fce77.json");
 const {Expo} = require("expo-server-sdk");
+const { TwitterAuthProvider } = require("firebase/auth/web-extension");
 
 // admin.initializeApp({
 //     credential:admin.credential.cert(serviceAccount)
@@ -107,7 +108,8 @@ async function getListOfTokensFromDB (){
     return tokens;
 }
 
-// Receives the list of patients in the DB that have not completed their tests
+
+/* 
 async function notifyDoctorsOfPatientsMissingTests(listOfPatientWithMissingTests) {
   // Fetch the list of tokens from the database
   const tokens = await getListOfTokensFromDB();
@@ -159,6 +161,66 @@ async function notifyDoctorsOfPatientsMissingTests(listOfPatientWithMissingTests
     })();
 
 }
+    */
+
+// Receives the list of patients in the DB that have not completed their tests
+async function notifyDoctorsOfPatientsMissingTests(listOfPatientWithMissingTests) {
+  // Fetch the list of tokens from the database
+  const tokens = await getListOfTokensFromDB();
+
+  let stringOfMissingPatients = "";
+  // Create a string of patient record numbers
+  for (let patient of listOfPatientWithMissingTests) {
+    let stringOfTestsMissing = ""
+    listOfPatientWithMissingTests.listOfTestOrderedButNotDelivered.map(testName => {
+      stringOfTestsMissing += `${testName}, `;
+    })
+    stringOfMissingPatients += `- ${patient.patientRecordNumber}, is missing the following tests: ${stringOfTestsMissing} \n`;
+  }
+  
+
+
+  let messages = []
+  tokens.map(async token => {
+    if (!Expo.isExpoPushToken(token)) {
+      console.error("Invalid Expo push token:", token);
+      //return;
+    }else{
+      const currentTime = new Date().toLocaleString("en-US", { timeZone: "America/Halifax" });
+      var notificationContent = {
+          title: "Patients with missing tests",
+          body: `The following patients have not yet completed their tests: \n ${stringOfMissingPatients} \n Please remind the patients that they need to complete their tests.`,
+          date: currentTime,
+      }
+
+      await firestoreDatabase.addDoc(firestoreDatabase.collection(firestoreDatabase.db, "Notifications"), notificationContent);
+
+      messages.push({
+        to: token,
+        sound: "default",
+        title: notificationContent.title,
+        body: notificationContent.body,
+        data: notificationContent.date,
+      });
+    }
+})
+
+
+// Send the notifications
+  let chunks = expo.chunkPushNotifications(messages);
+  let tickets = [];
+  (async () => {
+        for (let chunk of chunks) {
+            try {
+                let ticketChunk = await expo.sendPushNotificationsAsync(chunk);
+                tickets.push(...ticketChunk);
+            } catch (error) {
+                console.error("Error sending notifications to patients -> ", error);
+            }
+        }
+    })();
+
+}
 
 // Function to determine whether a patient has not completed their tests
 function isPatientMissingTests(patient) {
@@ -179,19 +241,54 @@ async function checkPatientsAndSendNotifications(){
         ...doc.data().patientInfo,
         documentID: doc.id
       }));
+
       // Send the notifications to the doctors about their patients missing tests
-      await notifyDoctorsOfPatientsMissingTests(patients.filter(patient => hasTestPassedTenDays(patient)));
+      const listOfPatients = patients.map(patient => {
+        const listOfTestOrderedButNotDelivered = getTestsOrderedButNoDelivered(patient)
+        return {
+          patientRecordNumber: patient.patientRecordNumber,
+          listOfTestOrderedButNotDelivered: listOfTestOrderedButNotDelivered
+        }
+      })
+      console.log(listOfPatients);
+      await notifyDoctorsOfPatientsMissingTests(listOfPatients);
 
   } catch (error) {
     console.error("Error during scheduled test check:", error);
   }
 }
 
-function hasTestPassedTenDays(patient) {
-  if (!patient.allTestsCompleted) return false;
-  const testDate = new Date(patient.testOrderDate);
-  const tenDaysAfter = new Date(testDate.getTime() + 10 * 24 * 60 * 60 * 1000);
-  return new Date() >= tenDaysAfter;
+async function getTestsOrderedButNoDelivered(patient) {
+  const querySnapshot = await firestoreDatabase.getDocs(firestoreDatabase.collection(firestoreDatabase.db, "MedicalExams"));
+  const listOfMedicalExamsFromDB = querySnapshot.docs.map(doc => ({
+    ...doc.data().MedicalExamsInfo.MedicalExamsName
+  }));
+
+  return listOfMedicalExamsFromDB.map(MedicalExamName => {
+    const dayDeliveredKey = `${MedicalExamName}DateTestIsDelivered`;
+    const dayOrderedKey = `${MedicalExamName}DateTestIsOrdered`;
+    if(patient[dayOrderedKey] != "" && patient[dayDeliveredKey] == "" && hasTestPassedReminderDate(new Date(patient[dayOrderedKey]))) {
+      return MedicalExamName
+    }
+  })
+}
+
+
+
+async function hasTestPassedReminderDate(testDate) {
+  if (!testDate) return false;
+  const docRef = firestoreDatabase.doc(
+    firestoreDatabase.collection(firebase.firestoreDatabase.db, "NotificationSettings"),
+    "DaysBeforeTestReminder"
+  );
+
+  const docSnap = await firestoreDatabase.getDoc(docRef);
+  let daysFromBackend = 10
+  if(docSnap.exist())
+      daysFromBackend = parseInt(docSnap.data().days, 10)
+
+  const xDaysAfter = new Date(testDate.getTime() + daysFromBackend * 24 * 60 * 60 * 1000);
+  return new Date() >= xDaysAfter;
 }
 
 // Helper function to check if the current day is a multiple of five
@@ -207,7 +304,8 @@ cron.schedule("0 8 * * *", () =>{
 });
 
 // Schedule a job to run every day at 5:00 PM (server time)
-cron.schedule("0 17 * * *", () =>{
+cron.schedule("06 16 * * *", () =>{
+      console.log("Executing command")
       checkPatientsAndSendNotifications()
 });
 

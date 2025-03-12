@@ -133,3 +133,5 @@ dist
 
 # Firebase Admin SDK
 optimal-doc-firebase-adminsdk-fnfzt-4d507fce77.json
+.vscode/settings.json
+.idx/dev.nix
