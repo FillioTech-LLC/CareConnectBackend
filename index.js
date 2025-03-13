@@ -170,13 +170,13 @@ async function notifyDoctorsOfPatientsMissingTests(listOfPatientWithMissingTests
 
   let stringOfMissingPatients = "";
   // Create a string of patient record numbers
-  for (let patient of listOfPatientWithMissingTests) {
-    let stringOfTestsMissing = ""
-    listOfPatientWithMissingTests.listOfTestOrderedButNotDelivered.map(testName => {
-      stringOfTestsMissing += `${testName}, `;
-    })
-    stringOfMissingPatients += `- ${patient.patientRecordNumber}, is missing the following tests: ${stringOfTestsMissing} \n`;
-  }
+  listOfPatientWithMissingTests.map(patient => {
+        let stringOfTestsMissing = ""
+        patient.listOfTestOrderedButNotDelivered.map(testName => {
+          stringOfTestsMissing += `${testName}, `;
+        })
+        stringOfMissingPatients += `- ${patient.patientRecordNumber}, is missing the following tests: ${stringOfTestsMissing} \n`;
+  })
   
 
 
@@ -243,14 +243,16 @@ async function checkPatientsAndSendNotifications(){
       }));
 
       // Send the notifications to the doctors about their patients missing tests
-      const listOfPatients = patients.map(patient => {
-        const listOfTestOrderedButNotDelivered = getTestsOrderedButNoDelivered(patient)
+      const listOfPatientPromises = patients.map(async patient => {
+        const listOfTest = await getTestsOrderedButNoDelivered(patient)
         return {
           patientRecordNumber: patient.patientRecordNumber,
-          listOfTestOrderedButNotDelivered: listOfTestOrderedButNotDelivered
+          listOfTestOrderedButNotDelivered: listOfTest
         }
       })
-      console.log(listOfPatients);
+
+      const listOfPatients = await Promise.all(listOfPatientPromises);
+
       await notifyDoctorsOfPatientsMissingTests(listOfPatients);
 
   } catch (error) {
@@ -261,30 +263,31 @@ async function checkPatientsAndSendNotifications(){
 async function getTestsOrderedButNoDelivered(patient) {
   const querySnapshot = await firestoreDatabase.getDocs(firestoreDatabase.collection(firestoreDatabase.db, "MedicalExams"));
   const listOfMedicalExamsFromDB = querySnapshot.docs.map(doc => ({
-    ...doc.data().MedicalExamsInfo.MedicalExamsName
+    ...doc.data().MedicalExamsInfo
   }));
 
-  return listOfMedicalExamsFromDB.map(MedicalExamName => {
-    const dayDeliveredKey = `${MedicalExamName}DateTestIsDelivered`;
-    const dayOrderedKey = `${MedicalExamName}DateTestIsOrdered`;
-    if(patient[dayOrderedKey] != "" && patient[dayDeliveredKey] == "" && hasTestPassedReminderDate(new Date(patient[dayOrderedKey]))) {
-      return MedicalExamName
-    }
-  })
+  return listOfMedicalExamsFromDB.map(MedicalExamInfo => {
+    const medicalExamName = MedicalExamInfo.MedicalExamsName.toLowerCase()
+    const dayDeliveredKey = `${medicalExamName}DateTestIsDelivered`;
+    const dayOrderedKey = `${medicalExamName}DateTestIsOrdered`;
+    if(patient[dayOrderedKey] != "" && patient[dayDeliveredKey] == "" && hasTestPassedReminderDate(new Date(patient[dayOrderedKey]))) 
+      return MedicalExamInfo.MedicalExamsName;
+  }).filter(testName => testName !== undefined);
 }
 
 
 
 async function hasTestPassedReminderDate(testDate) {
+
   if (!testDate) return false;
-  const docRef = firestoreDatabase.doc(
-    firestoreDatabase.collection(firebase.firestoreDatabase.db, "NotificationSettings"),
+  const docRef = await firestoreDatabase.doc(
+    firestoreDatabase.collection(firestoreDatabase.db, "NotificationSettings"),
     "DaysBeforeTestReminder"
   );
 
   const docSnap = await firestoreDatabase.getDoc(docRef);
   let daysFromBackend = 10
-  if(docSnap.exist())
+  if(docSnap.exists)
       daysFromBackend = parseInt(docSnap.data().days, 10)
 
   const xDaysAfter = new Date(testDate.getTime() + daysFromBackend * 24 * 60 * 60 * 1000);
@@ -304,7 +307,7 @@ cron.schedule("0 8 * * *", () =>{
 });
 
 // Schedule a job to run every day at 5:00 PM (server time)
-cron.schedule("06 16 * * *", () =>{
+cron.schedule("39 22 * * *", () =>{
       console.log("Executing command")
       checkPatientsAndSendNotifications()
 });

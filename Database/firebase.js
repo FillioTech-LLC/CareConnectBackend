@@ -1,5 +1,5 @@
 const {initializeApp} = require("firebase/app")
-const {getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc} = require("firebase/firestore")
+const {getFirestore, collection, query, where, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc} = require("firebase/firestore")
 
 
 const firebaseConfig = {
@@ -22,6 +22,7 @@ const firestoreDatabase = {
   query,
   where,
   getDocs,
+  getDoc,
   addDoc,
   updateDoc,
   deleteDoc,
