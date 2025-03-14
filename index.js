@@ -52,7 +52,9 @@ app.post("/sendPatientCompletedNotification", async (req, res) => {
     const tokens = await getListOfTokensFromDB();
     let messages = [];
     const {patientRecordNumber} = req.body;
-    const currentTime = new Date().toLocaleString("en-US", { timeZone: "America/Halifax" });
+    const currentTime = new Date().toLocaleString("en-US", {
+      timeZone: "America/Puerto_Rico",
+    });
      if(!patientRecordNumber)
       return res.status(400).send("Patient record number is required");
 
@@ -195,7 +197,7 @@ async function notifyDoctorsOfPatientsMissingTests(listOfPatientWithMissingTests
       //return;
     } else {
       const currentTime = new Date().toLocaleString("en-US", {
-        timeZone: "America/Halifax",
+        timeZone: "America/Puerto_Rico",
       });
       var notificationContent = {
         title: "Patients with missing tests",
@@ -241,7 +243,9 @@ function isPatientMissingTests(patient) {
 
 // Function to check if patients are missing their tests and send notifications to the doctors letting them know of the patients that are missing tests
 async function checkPatientsAndSendNotifications(){
-  const currentTime = new Date().toLocaleString("en-US", { timeZone: "America/Halifax" });
+  const currentTime = new Date().toLocaleString("en-US", {
+    timeZone: "America/Puerto_Rico",
+  });
   console.log(`Running scheduled patient test check at ${currentTime}`);
   try {
       // Fetch patients from Firestore
@@ -316,13 +320,22 @@ function isMultipleOfFive() {
 cron.schedule("0 8 * * *", () =>{
       console.log("Executing sending notifications to doctors at 8:00 PM");
       checkPatientsAndSendNotifications()
+},
+{
+  timezone: "America/Puerto_Rico",
 });
 
 // Schedule a job to run every day at 5:00 PM (server time)
-cron.schedule("00 17 * * *", () =>{
-      console.log("Executing sending notifications to doctors at 5:00 PM");
-      checkPatientsAndSendNotifications()
-});
+cron.schedule(
+  "00 17 * * *",
+  () => {
+    console.log("Executing sending notifications to doctors at 5:00 PM");
+    checkPatientsAndSendNotifications();
+  },
+  {
+    timezone: "America/Puerto_Rico",
+  }
+);
 
 
 
