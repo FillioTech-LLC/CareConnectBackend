@@ -38,7 +38,6 @@ app.get(`/getAllPatients`, async (req, resp) => {
                     ...doc.data().patientInfo,
                     documentID: doc.id
                 }))
-        // console.log(listOfPatientsFromDB)
 
         resp.status(200).send(listOfPatientsFromDB)
     }catch (error) {
@@ -56,8 +55,7 @@ app.post("/sendPatientCompletedNotification", async (req, res) => {
     const currentTime = new Date().toLocaleString("en-US", { timeZone: "America/Halifax" });
      if(!patientRecordNumber)
       return res.status(400).send("Patient record number is required");
-    // console.log("current time -> ", currentTime)
-    // console.log("tokens -> ", tokens)
+
     var notificationContent = {
         title: "Patient Has Completed Test",
         body: `Patient with record id "${patientRecordNumber}" has completed their test!`,
@@ -73,7 +71,7 @@ app.post("/sendPatientCompletedNotification", async (req, res) => {
                 sound: 'default',
                 title: notificationContent.title,
                 body: notificationContent.body,
-                data: notificationContent.date
+                data: {date: notificationContent.date}
             });
         }
     })
@@ -102,9 +100,7 @@ async function getListOfTokensFromDB (){
                     ...doc.data().userInfo,
                     documentID: doc.id
                 }))
-        // console.log(listOfUsersInDB)
-    let tokens = listOfUsersInDB.map(user => user.notificationPushToken);
-
+    let tokens = listOfUsersInDB.map(user => user.notificationPushToken).filter(token => token !== undefined);
     return tokens;
 }
 
@@ -170,56 +166,71 @@ async function notifyDoctorsOfPatientsMissingTests(listOfPatientWithMissingTests
 
   let stringOfMissingPatients = "";
   // Create a string of patient record numbers
-  listOfPatientWithMissingTests.map(patient => {
-        let stringOfTestsMissing = ""
-        patient.listOfTestOrderedButNotDelivered.map(testName => {
-          stringOfTestsMissing += `${testName}, `;
-        })
-        stringOfMissingPatients += `- ${patient.patientRecordNumber}, is missing the following tests: ${stringOfTestsMissing} \n`;
-  })
-  
+  listOfPatientWithMissingTests.map((patient) => {
+    let stringOfTestsMissing = "";
+    patient.listOfTestOrderedButNotDelivered.map((testName) => {
+      stringOfTestsMissing += `${testName}, `;
+    });
+    stringOfMissingPatients += `- ${patient.patientRecordNumber}, is missing the following tests: ${stringOfTestsMissing} \n`;
+  });
 
+  let messages = [];
 
-  let messages = []
-  tokens.map(async token => {
+  /* 
+    // Send the notifications to the doctors about their patients missing tests
+      const listOfPatientPromises = patients.map(async patient => {
+        const listOfTest = await getTestsOrderedButNoDelivered(patient)
+        return {
+          patientRecordNumber: patient.patientRecordNumber,
+          listOfTestOrderedButNotDelivered: listOfTest
+        }
+      })
+
+      const listOfPatients = await Promise.all(listOfPatientPromises);
+  */
+
+   await Promise.all(tokens.map(async (token) => {
     if (!Expo.isExpoPushToken(token)) {
       console.error("Invalid Expo push token:", token);
       //return;
-    }else{
-      const currentTime = new Date().toLocaleString("en-US", { timeZone: "America/Halifax" });
+    } else {
+      const currentTime = new Date().toLocaleString("en-US", {
+        timeZone: "America/Halifax",
+      });
       var notificationContent = {
-          title: "Patients with missing tests",
-          body: `The following patients have not yet completed their tests: \n ${stringOfMissingPatients} \n Please remind the patients that they need to complete their tests.`,
-          date: currentTime,
-      }
+        title: "Patients with missing tests",
+        body: `The following patients have not yet completed their tests: \n ${stringOfMissingPatients} \n Please remind the patients that they need to complete their tests.`,
+        date: currentTime,
+      };
 
-      await firestoreDatabase.addDoc(firestoreDatabase.collection(firestoreDatabase.db, "Notifications"), notificationContent);
+      await firestoreDatabase.addDoc(
+        firestoreDatabase.collection(firestoreDatabase.db, "Notifications"),
+        notificationContent
+      );
 
       messages.push({
         to: token,
         sound: "default",
         title: notificationContent.title,
         body: notificationContent.body,
-        data: notificationContent.date,
+        data:{date: notificationContent.date},
       });
     }
-})
+  }));
 
-
-// Send the notifications
+  // Send the notifications
   let chunks = expo.chunkPushNotifications(messages);
   let tickets = [];
   (async () => {
-        for (let chunk of chunks) {
-            try {
-                let ticketChunk = await expo.sendPushNotificationsAsync(chunk);
-                tickets.push(...ticketChunk);
-            } catch (error) {
-                console.error("Error sending notifications to patients -> ", error);
-            }
-        }
-    })();
-
+    for (let chunk of chunks) {
+      try {
+        let ticketChunk = await expo.sendPushNotificationsAsync(chunk);
+        tickets.push(...ticketChunk);
+      } catch (error) {
+        console.error("Error sending notifications to patients -> ", error);
+      }
+    }
+  })();
 }
 
 // Function to determine whether a patient has not completed their tests
@@ -303,12 +314,13 @@ function isMultipleOfFive() {
 
 // Schedule a job to run every day at 8:00 AM (server time)
 cron.schedule("0 8 * * *", () =>{
+      console.log("Executing sending notifications to doctors at 8:00 PM");
       checkPatientsAndSendNotifications()
 });
 
 // Schedule a job to run every day at 5:00 PM (server time)
-cron.schedule("39 22 * * *", () =>{
-      console.log("Executing command")
+cron.schedule("00 17 * * *", () =>{
+      console.log("Executing sending notifications to doctors at 5:00 PM");
       checkPatientsAndSendNotifications()
 });
 
