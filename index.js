@@ -31,6 +31,14 @@ app.use(express.json()) // Uses middleware to parse the JSON
 
 app.listen(port, () => console.log(`its alive on http://localhost:${port}`))
 
+
+
+
+// ----------------------- TEST API Endpoints --------------------------------------------------------------------
+
+
+// This method was created as a test to retrieve all patients from the database and to send it to the front end
+// Se puede usar de referencia si tuviesemos que usar algo asi de nuevo
 app.get(`/getAllPatients`, async (req, resp) => {
     try{
         const querySnapshot = await firestoreDatabase.getDocs(firestoreDatabase.collection(firestoreDatabase.db, "Patients"));
@@ -46,6 +54,8 @@ app.get(`/getAllPatients`, async (req, resp) => {
   }
 })
 
+// This method was created as a test to send notifications to the doctors when a patient has completed their tests
+// Se puede usar de referencia si tuviesemos que usar algo asi de nuevo
 app.post("/sendPatientCompletedNotification", async (req, res) => {
     // Create the messages array
     // let token = "ExponentPushToken[wOX2vLBx-1QT7gLI3YNG3i]" 
@@ -64,37 +74,22 @@ app.post("/sendPatientCompletedNotification", async (req, res) => {
         date: currentTime,
     }
 
-    await firestoreDatabase.addDoc(firestoreDatabase.collection(firestoreDatabase.db, "Notifications"), notificationContent);
-
-    tokens.map(token => {
-        if (Expo.isExpoPushToken(token)) {
-            messages.push({
-                to: token,
-                sound: 'default',
-                title: notificationContent.title,
-                body: notificationContent.body,
-                data: {date: notificationContent.date}
-            });
-        }
-    })
- 
-    
-    // Send the notifications
-    let chunks = expo.chunkPushNotifications(messages);
-    let tickets = [];
-    (async () => {
-        for (let chunk of chunks) {
-            try {
-                let ticketChunk = await expo.sendPushNotificationsAsync(chunk);
-                tickets.push(...ticketChunk);
-            } catch (error) {
-                console.error(error);
-            }
-        }
-    })();
+    await sendNotificationToUsers(notificationContent);
 
     res.status(200).send("Notification sent");
 });
+
+
+// ----------------------- TEST API Endpoints --------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
 
 async function getListOfTokensFromDB (){
  const querySnapshot = await firestoreDatabase.getDocs(firestoreDatabase.collection(firestoreDatabase.db, "Users"));
@@ -106,140 +101,36 @@ async function getListOfTokensFromDB (){
     return tokens;
 }
 
+function getStringOfMissingPatients(listOfPatientWithMissingTests) {
 
-/* 
-async function notifyDoctorsOfPatientsMissingTests(listOfPatientWithMissingTests) {
-  // Fetch the list of tokens from the database
-  const tokens = await getListOfTokensFromDB();
-
-  let stringOfMissingPatients = "";
-  // Create a string of patient record numbers
-  for (let patient of listOfPatientWithMissingTests) 
-    stringOfMissingPatients += "- " + patient.patientRecordNumber + " \n";
-  
-
-
-  let messages = []
-  tokens.map(async token => {
-    if (!Expo.isExpoPushToken(token)) {
-      console.error("Invalid Expo push token:", token);
-      //return;
-    }else{
-      const currentTime = new Date().toLocaleString("en-US", { timeZone: "America/Halifax" });
-      var notificationContent = {
-          title: "Patients with missing tests",
-          body: `The following patients have not yet completed their tests: \n ${stringOfMissingPatients} \n Please remind the patients that they need to complete their tests.`,
-          date: currentTime,
-      }
-
-      await firestoreDatabase.addDoc(firestoreDatabase.collection(firestoreDatabase.db, "Notifications"), notificationContent);
-
-      messages.push({
-        to: token,
-        sound: "default",
-        title: notificationContent.title,
-        body: notificationContent.body,
-        data: notificationContent.date,
-      });
-    }
-})
-
-// Send the notifications
-  let chunks = expo.chunkPushNotifications(messages);
-  let tickets = [];
-  (async () => {
-        for (let chunk of chunks) {
-            try {
-                let ticketChunk = await expo.sendPushNotificationsAsync(chunk);
-                tickets.push(...ticketChunk);
-            } catch (error) {
-                console.error("Error sending notifications to patients -> ", error);
-            }
-        }
-    })();
-
-}
-    */
-
-// Receives the list of patients in the DB that have not completed their tests
-async function notifyDoctorsOfPatientsMissingTests(listOfPatientWithMissingTests) {
-  // Fetch the list of tokens from the database
-  const tokens = await getListOfTokensFromDB();
-
-  let stringOfMissingPatients = "";
-  // Create a string of patient record numbers
-  listOfPatientWithMissingTests.map((patient) => {
-    let stringOfTestsMissing = "";
-    patient.listOfTestOrderedButNotDelivered.map((testName) => {
+   let stringOfMissingPatients = "";
+   // Create a string of patient record numbers
+   listOfPatientWithMissingTests.map((patient) => {
+   let stringOfTestsMissing = "";
+   patient.listOfTestOrderedButNotDelivered.map((testName) => {
       stringOfTestsMissing += `${testName}, `;
     });
     stringOfMissingPatients += `- ${patient.patientRecordNumber}, is missing the following tests: ${stringOfTestsMissing} \n`;
   });
 
-  let messages = [];
-
-  /* 
-    // Send the notifications to the doctors about their patients missing tests
-      const listOfPatientPromises = patients.map(async patient => {
-        const listOfTest = await getTestsOrderedButNoDelivered(patient)
-        return {
-          patientRecordNumber: patient.patientRecordNumber,
-          listOfTestOrderedButNotDelivered: listOfTest
-        }
-      })
-
-      const listOfPatients = await Promise.all(listOfPatientPromises);
-  */
-
-   await Promise.all(tokens.map(async (token) => {
-    if (!Expo.isExpoPushToken(token)) {
-      console.error("Invalid Expo push token:", token);
-      //return;
-    } else {
-      const currentTime = new Date().toLocaleString("en-US", {
-        timeZone: "America/Puerto_Rico",
-      });
-      var notificationContent = {
-        title: "Patients with missing tests",
-        body: `The following patients have not yet completed their tests: \n ${stringOfMissingPatients} \n Please remind the patients that they need to complete their tests.`,
-        date: currentTime,
-      };
-
-      await firestoreDatabase.addDoc(
-        firestoreDatabase.collection(firestoreDatabase.db, "Notifications"),
-        notificationContent
-      );
-
-      messages.push({
-        to: token,
-        sound: "default",
-        title: notificationContent.title,
-        body: notificationContent.body,
-        data:{date: notificationContent.date},
-      });
-    }
-  }));
-
-  // Send the notifications
-  let chunks = expo.chunkPushNotifications(messages);
-  let tickets = [];
-  (async () => {
-    for (let chunk of chunks) {
-      try {
-        let ticketChunk = await expo.sendPushNotificationsAsync(chunk);
-        tickets.push(...ticketChunk);
-      } catch (error) {
-        console.error("Error sending notifications to patients -> ", error);
-      }
-    }
-  })();
+  return stringOfMissingPatients;
 }
 
 // Function to determine whether a patient has not completed their tests
-function isPatientMissingTests(patient) {
-  return patient.allTestsCompleted === "no";
+function isPatientMissingTestsAfterMonthOfAssigned(patient) {
+  return (
+    patient.allTestsCompleted === "no" &&
+    hasMonthPassedFromGivenDate(new Date(patient.patientDateAssigned))
+  );
 }
 
+function hasMonthPassedFromGivenDate(givenDate) {
+  const currentDate = new Date();
+  const oneMonthAgo = new Date();
+  oneMonthAgo.setMonth(currentDate.getMonth() - 1);
+
+  return givenDate <= oneMonthAgo;
+}
 
 // Function to check if patients are missing their tests and send notifications to the doctors letting them know of the patients that are missing tests
 async function checkPatientsAndSendNotifications(){
@@ -267,8 +158,18 @@ async function checkPatientsAndSendNotifications(){
       })
 
       const listOfPatients = await Promise.all(listOfPatientPromises);
+    
+      let stringOfMissingPatients = getStringOfMissingPatients(listOfPatients);
 
-      await notifyDoctorsOfPatientsMissingTests(listOfPatients);
+      var notificationContent = {
+        title: "Patients with missing tests",
+        body: `The following patients have not yet completed their tests: \n ${stringOfMissingPatients} \n Please remind the patients that they need to complete their tests.`,
+        date: currentTime,
+      };
+
+      await sendNotificationToUsers(notificationContent);
+      
+      //wait notifyDoctorsOfPatientsMissingTests(listOfPatients);
 
   } catch (error) {
     console.error("Error during scheduled test check:", error);
@@ -316,26 +217,151 @@ function isMultipleOfFive() {
   return dayOfMonth % 5 === 0;
 }
 
-// Schedule a job to run every day at 8:00 AM (server time)
-cron.schedule("0 8 * * *", () =>{
+async function getPatientsThatHaveNotFinishedAllTestAfterFirstMonthOfAssigned() {
+  // Fetch patients from Firestore
+  const querySnapshot = await firestoreDatabase.getDocs(
+    firestoreDatabase.collection(firestoreDatabase.db, "Patients")
+  );
+
+  // Map the results to an array of patient objects
+  const patients = querySnapshot.docs.map((doc) => ({
+    ...doc.data().patientInfo,
+    documentID: doc.id,
+  }));
+
+  return patients.filter(isPatientMissingTestsAfterMonthOfAssigned);
+}
+
+function getStringOfPatientsThatHaveNotFinishedAllTest(listOfPatientsThatHaveNotFinishedAllTest) {
+  let stringOfPatientsThatHaveNotFinishedAllTest = "";
+  listOfPatientsThatHaveNotFinishedAllTest.map((patient) => {
+    stringOfPatientsThatHaveNotFinishedAllTest += `- ${patient.patientRecordNumber} \n`;
+  });
+
+  return stringOfPatientsThatHaveNotFinishedAllTest;
+}
+
+
+async function sendNotificationToUsers(notification){
+
+  await firestoreDatabase.addDoc(
+    firestoreDatabase.collection(firestoreDatabase.db, "Notifications"),
+    notification
+  );
+
+  // Fetch the list of tokens from the database
+  const tokens = await getListOfTokensFromDB();
+
+  let messages = [];
+  await Promise.all(
+    tokens.map(async (token) => {
+      if (!Expo.isExpoPushToken(token)) {
+        console.error("Invalid Expo push token:", token);
+      } else {
+        messages.push({
+          to: token,
+          sound: "default",
+          title: notification.title,
+          body: notification.body,
+          data: { date: notification.date },
+        });
+      }
+    })
+  );
+
+  // Send the notifications
+  let chunks = expo.chunkPushNotifications(messages);
+  let tickets = [];
+  (async () => {
+    for (let chunk of chunks) {
+      try {
+        let ticketChunk = await expo.sendPushNotificationsAsync(chunk);
+        tickets.push(...ticketChunk);
+      } catch (error) {
+        console.error("Error sending notifications to doctors -> ", error);
+      }
+    }
+  })();
+}
+
+async function sendMonthlyNotification(){
+  const currentTime = new Date().toLocaleString("en-US", {
+    timeZone: "America/Puerto_Rico",
+  });
+
+  const listOfPatientsThatHaveNotFinishedAllTest =
+    await getPatientsThatHaveNotFinishedAllTestAfterFirstMonthOfAssigned();
+  const stringOfPatients = getStringOfPatientsThatHaveNotFinishedAllTest(
+    listOfPatientsThatHaveNotFinishedAllTest
+  );
+
+  const monthlyNotification = {
+    title: "Incomplete Patient Tests",
+    body: `The following patients were assigned over a month ago and have not yet completed their tests. \n ${stringOfPatients} \n Please review the patients to finish their tests.`,
+    date: currentTime,
+  };
+
+  await sendNotificationToUsers(monthlyNotification);
+}
+
+
+
+
+
+
+
+
+// ---------------------------- Cron Jobs --------------------------------------------------------------------
+
+
+
+// Schedule a job to run every day at 8:00 AM Puerto Rico time.
+
+// This cron job verifies every morning at 8am if there are any patients that have not completed 
+// their tests within the time frame specified in the backend
+cron.schedule("0 8 * * *", async () =>{
       console.log("Executing sending notifications to doctors at 8:00 PM");
-      checkPatientsAndSendNotifications()
+      await checkPatientsAndSendNotifications()
 },
 {
   timezone: "America/Puerto_Rico",
 });
 
+
+
 // Schedule a job to run every day at 5:00 PM (server time)
+
+// This cron job verifies every day at 5pm if there are any patients that have not completed
+// their tests within the time frame specified in the backend
 cron.schedule(
-  "00 17 * * *",
-  () => {
+  "39 18 * * *",
+  async () => {
     console.log("Executing sending notifications to doctors at 5:00 PM");
-    checkPatientsAndSendNotifications();
+    await checkPatientsAndSendNotifications();
   },
   {
     timezone: "America/Puerto_Rico",
   }
 );
+
+
+// Schedule the monthly notification job
+
+// This cron job verifies every month on the 15th at 6:00 PM if there are any patients that have taken 
+// longer than one month to complete their test
+cron.schedule(
+  "0 8 1 * *",
+  async () => {
+    console.log("Executing monthly notification job");
+    await sendMonthlyNotification();
+  },
+  {
+    timezone: "America/Puerto_Rico", // Adjust the timezone if necessary
+  }
+);
+
+
+// ---------------------------- Cron Jobs --------------------------------------------------------------------
 
 
 
