@@ -334,7 +334,7 @@ cron.schedule("0 8 * * *", async () =>{
 // This cron job verifies every day at 5pm if there are any patients that have not completed
 // their tests within the time frame specified in the backend
 cron.schedule(
-  "39 18 * * *",
+  "0 17 * * *",
   async () => {
     console.log("Executing sending notifications to doctors at 5:00 PM");
     await checkPatientsAndSendNotifications();
@@ -347,7 +347,7 @@ cron.schedule(
 
 // Schedule the monthly notification job
 
-// This cron job verifies every month on the 15th at 6:00 PM if there are any patients that have taken 
+// This cron job verifies every month on the 1th at 8:00 AM if there are any patients that have taken 
 // longer than one month to complete their test
 cron.schedule(
   "0 8 1 * *",
