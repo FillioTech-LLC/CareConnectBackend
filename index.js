@@ -157,19 +157,18 @@ async function checkPatientsAndSendNotifications(){
         }
       })
 
-      const listOfPatients = await Promise.all(listOfPatientPromises);
-    
-      let stringOfMissingPatients = getStringOfMissingPatients(listOfPatients);
+      const listOfPatients = (await Promise.all(listOfPatientPromises)).filter(patient => patient.listOfTestOrderedButNotDelivered.length !== 0);
+      if(listOfPatients.length !== 0){
+          let stringOfMissingPatients = getStringOfMissingPatients(listOfPatients);
 
-      var notificationContent = {
-        title: "Patients with missing tests",
-        body: `The following patients have not yet completed their tests: \n ${stringOfMissingPatients} \n Please remind the patients that they need to complete their tests.`,
-        date: currentTime,
-      };
+          var notificationContent = {
+            title: "Patients with missing tests",
+            body: `The following patients have not yet completed their tests: \n ${stringOfMissingPatients} \n Please remind the patients that they need to complete their tests.`,
+            date: currentTime,
+          };
 
-      await sendNotificationToUsers(notificationContent);
-      
-      //wait notifyDoctorsOfPatientsMissingTests(listOfPatients);
+          await sendNotificationToUsers(notificationContent);
+    }
 
   } catch (error) {
     console.error("Error during scheduled test check:", error);
@@ -295,13 +294,15 @@ async function sendMonthlyNotification(){
     listOfPatientsThatHaveNotFinishedAllTest
   );
 
-  const monthlyNotification = {
-    title: "Incomplete Patient Tests",
-    body: `The following patients were assigned over a month ago and have not yet completed their tests. \n ${stringOfPatients} \n Please review the patients to finish their tests.`,
-    date: currentTime,
-  };
+  if(stringOfPatients !== ""){
+      const monthlyNotification = {
+        title: "Incomplete Patient Tests",
+        body: `The following patients were assigned over a month ago and have not yet completed their tests. \n ${stringOfPatients} \n Please review the patients to finish their tests.`,
+        date: currentTime,
+      };
 
-  await sendNotificationToUsers(monthlyNotification);
+      await sendNotificationToUsers(monthlyNotification);
+  }
 }
 
 
