@@ -1,3 +1,4 @@
+require("dotenv").config();
 const {firestoreDatabase} = require("./Database/firebase");
 const express = require("express"); 
 const admin = require("firebase-admin")
@@ -6,6 +7,7 @@ const cors = require('cors');
 // const serviceAccount = require("./Database/optimal-doc-firebase-adminsdk-fnfzt-4d507fce77.json");
 const {Expo} = require("expo-server-sdk");
 const { TwitterAuthProvider } = require("firebase/auth/web-extension");
+const { sendSms } = require("./services/twilio");
 
 // admin.initializeApp({
 //     credential:admin.credential.cert(serviceAccount)
@@ -79,6 +81,20 @@ app.post("/sendPatientCompletedNotification", async (req, res) => {
     res.status(200).send("Notification sent");
 });
 
+// Send an SMS message using Twilio
+app.post("/sendSms", async (req, res) => {
+  try {
+    const { to, body } = req.body;
+    if (!to || !body) {
+      return res.status(400).send({ error: "'to' and 'body' are required" });
+    }
+    const result = await sendSms({ to, body });
+    res.status(200).send({ success: true, sid: result.sid, status: result.status });
+  } catch (error) {
+    console.error("Error sending SMS:", error);
+    res.status(500).send({ error: "Failed to send SMS" });
+  }
+});
 
 // ----------------------- TEST API Endpoints --------------------------------------------------------------------
 
@@ -311,6 +327,10 @@ async function sendMonthlyNotification(){
 
 
 
+
+async function sendSmsMessage(to, messageBody) {
+  return sendSms({ to, body: messageBody });
+}
 
 // ---------------------------- Cron Jobs --------------------------------------------------------------------
 
