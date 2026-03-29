@@ -197,13 +197,14 @@ async function getTestsOrderedButNoDelivered(patient) {
     ...doc.data().MedicalExamsInfo
   }));
 
-  return listOfMedicalExamsFromDB.map(MedicalExamInfo => {
+  const results = await Promise.all(listOfMedicalExamsFromDB.map(async MedicalExamInfo => {
     const medicalExamName = MedicalExamInfo.MedicalExamsName.toLowerCase()
     const dayDeliveredKey = `${medicalExamName}DateTestIsDelivered`;
     const dayOrderedKey = `${medicalExamName}DateTestIsOrdered`;
-    if(patient[dayOrderedKey] != "" && patient[dayDeliveredKey] == "" && hasTestPassedReminderDate(new Date(patient[dayOrderedKey]))) 
+    if(patient[dayOrderedKey] != "" && patient[dayDeliveredKey] == "" && await hasTestPassedReminderDate(new Date(patient[dayOrderedKey])))
       return MedicalExamInfo.MedicalExamsName;
-  }).filter(testName => testName !== undefined);
+  }));
+  return results.filter(testName => testName !== undefined);
 }
 
 
